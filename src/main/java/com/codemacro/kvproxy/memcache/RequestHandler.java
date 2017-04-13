@@ -1,9 +1,8 @@
 package com.codemacro.kvproxy.memcache;
 
 import com.codemacro.kvproxy.ConnectionListener;
-import net.spy.memcached.MemcachedClient;
-import net.spy.memcached.internal.OperationCompletionListener;
-import net.spy.memcached.internal.OperationFuture;
+import net.rubyeye.xmemcached.MemcachedClient;
+import net.rubyeye.xmemcached.exception.MemcachedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xnio.channels.Channels;
@@ -11,8 +10,8 @@ import org.xnio.channels.StreamSinkChannel;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Date;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Created on 2017/4/12.
@@ -38,11 +37,15 @@ public class RequestHandler implements ConnectionListener {
       e.printStackTrace();
     } catch (ExecutionException e) {
       e.printStackTrace();
+    } catch (MemcachedException e) {
+      e.printStackTrace();
+    } catch (TimeoutException e) {
+      e.printStackTrace();
     }
   }
 
   private void handleRequest(final ByteBuffer buffer, final StreamSinkChannel sink)
-      throws ExecutionException, InterruptedException {
+      throws ExecutionException, InterruptedException, TimeoutException, MemcachedException {
     while (buffer.hasRemaining()) { // commands after a noreply `set'
       boolean finished = parser.consume(buffer);
       if (!finished) break;
@@ -51,21 +54,14 @@ public class RequestHandler implements ConnectionListener {
         String key = parser.getKeys().get(0);
         byte[] content = parser.cloneData();
         // TODO: pass client flag
-        OperationFuture<Boolean> ret = client.set(key, (int) parser.getExpTime(), content);
+        boolean ret = client.set(key, (int) parser.getExpTime(), content);
         if (!parser.isNoreply()) {
-          reply(ret.get() ? "STORED" : "NOT_STORED", sink);
-          /*
-          ret.addListener(new OperationCompletionListener() {
-            public void onComplete(OperationFuture<?> opFuture) throws Exception {
-              Boolean r = (Boolean) opFuture.get();
-              reply(r ? "STORED" : "NOT_STORED", sink);
-            }
-          }); */
+          reply(ret ? "STORED" : "NOT_STORED", sink);
         }
       } else if (parser.isRetrieveCmd()) {
         if (cmd.equals("get")) {
           String key = parser.getKeys().get(0);
-          byte[] content = (byte[]) client.get(key);
+          byte[] content = client.get(key);
           ByteBuffer dstBuf = ByteBuffer.allocate(1024);
           if (content == null) {
             dstBuf.put("END".getBytes());

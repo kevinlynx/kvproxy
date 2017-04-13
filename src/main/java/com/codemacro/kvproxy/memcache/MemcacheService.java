@@ -1,11 +1,10 @@
 package com.codemacro.kvproxy.memcache;
 
-import com.codemacro.kvproxy.ConnectionListener;
-import com.codemacro.kvproxy.ServerLocator;
-import com.codemacro.kvproxy.Service;
-import com.codemacro.kvproxy.ServiceProvider;
-import net.spy.memcached.AddrUtil;
-import net.spy.memcached.MemcachedClient;
+import com.codemacro.kvproxy.*;
+import net.rubyeye.xmemcached.MemcachedClient;
+import net.rubyeye.xmemcached.MemcachedClientBuilder;
+import net.rubyeye.xmemcached.XMemcachedClientBuilder;
+import net.rubyeye.xmemcached.utils.AddrUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,11 +21,14 @@ public class MemcacheService implements Service, ServiceProvider {
   public MemcacheService() {
   }
 
-  public void initialize(ServerLocator locator) {
+  public void initialize(Config conf, ServerLocator locator) {
     logger.info("initialize memcache service");
     List<String> servers = locator.getList();
     try {
-      client = new MemcachedClient(AddrUtil.getAddresses(servers));
+      MemcachedClientBuilder builder = new XMemcachedClientBuilder(
+          AddrUtil.getAddresses(joinServers(servers)));
+      builder.setConnectionPoolSize(conf.clientPoolSize);
+      client = builder.build();
     } catch (IOException e) {
       logger.error("create memcache client failed", e);
       throw new RuntimeException(e);
@@ -39,5 +41,13 @@ public class MemcacheService implements Service, ServiceProvider {
 
   public Service newService() {
     return this;
+  }
+
+  private String joinServers(List<String> servers) {
+    StringBuilder sb = new StringBuilder();
+    for (String addr : servers) {
+      sb.append(' ').append(addr);
+    }
+    return sb.toString();
   }
 }

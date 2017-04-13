@@ -13,6 +13,7 @@ public class Config {
   public String locator;
   public String[] servers;
   public int ioThreadCount;
+  public int clientPoolSize;
 
   public static Config build(InputStream stream) throws IOException {
     Properties prop = new Properties();
@@ -27,6 +28,7 @@ public class Config {
       }
     }
     conf.ioThreadCount = Integer.parseInt(prop.getProperty("ioThreadCount"));
+    conf.clientPoolSize = Integer.parseInt(prop.getProperty("clientPoolSize", String.valueOf(1)));
     return conf;
   }
 

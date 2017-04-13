@@ -28,7 +28,7 @@ public class KVProxy implements ChannelListener<AcceptingChannel<StreamConnectio
   public boolean start(Config conf) throws IOException {
     OptionMap options = OptionMap.builder().set(Options.WORKER_IO_THREADS, conf.ioThreadCount).getMap();
     worker = Xnio.getInstance().createWorker(options);
-    service.initialize(locator);
+    service.initialize(conf, locator);
     server = worker.createStreamConnectionServer(new InetSocketAddress(conf.port), this, OptionMap.EMPTY);
     server.resumeAccepts();
     return true;
