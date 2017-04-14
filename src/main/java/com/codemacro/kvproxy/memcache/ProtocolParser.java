@@ -16,15 +16,17 @@ public class ProtocolParser {
   private static final int STATE_DATA = 1;
   private static final int STATE_DONE = 2;
   private static final String[] STORE_CMDS = {"set", "add", "replace", "prepend", "append", "cas"};
+  private static final String[] OTHER_CMDS = {"stats", "flush_all", "version", "quit"};
   private List<ByteBuffer> buffers = new ArrayList<ByteBuffer>();
   private StringBuilder cmdline;
   private int state;
   private String command;
   private List<String> keys = new ArrayList<String>();
   private int flag;
-  private long expTime;
+  private long time;
   private int bytes;
   private int size;
+  private long value;
   private boolean noreply = false;
 
   public static class ParseException extends RuntimeException {
@@ -42,8 +44,9 @@ public class ProtocolParser {
     keys.clear();
     flag = 0;
     bytes = size = 0;
-    expTime = 0;
+    time = 0;
     noreply = false;
+    value = 0;
   }
 
   public boolean consume(final ByteBuffer buf) throws ParseException {
@@ -90,8 +93,12 @@ public class ProtocolParser {
     return flag;
   }
 
-  public long getExpTime() {
-    return expTime;
+  public long getTime() {
+    return time;
+  }
+
+  public long getValue() {
+    return value;
   }
 
   public List<ByteBuffer> getBuffers() {
@@ -109,8 +116,23 @@ public class ProtocolParser {
     return command.equals("get") || command.equals("gets");
   }
 
+  public boolean isIncDecCmd() {
+    return command.equals("incr") || command.equals("decr");
+  }
+
+  public boolean isOtherCmd() {
+    for (String c : OTHER_CMDS) {
+      if (c.equals(command)) return true;
+    }
+    return false;
+  }
+
   public List<String> getKeys() {
     return keys;
+  }
+
+  public String getKey() {
+    return keys.get(0);
   }
 
   public boolean isNoreply() {
@@ -157,7 +179,7 @@ public class ProtocolParser {
       expect(parts.length == 5 || parts.length == 6);
       keys.add(parts[1]);
       flag = Integer.parseInt(parts[2]);
-      expTime = Long.parseLong(parts[3]);
+      time = Long.parseLong(parts[3]);
       bytes = Integer.parseInt(parts[4]);
       if (parts.length == 6) {
         expect(parts[5].equals("noreply"));
@@ -169,6 +191,26 @@ public class ProtocolParser {
       for (int i = 1; i < parts.length; ++i) {
         keys.add(parts[i]);
       }
+      return true;
+    } else if (command.equals("delete")) {
+      expect(parts.length >= 2);
+      keys.add(parts[1]);
+      time = parts.length >= 3 ? Long.parseLong(parts[2]) : 0;
+      if (parts.length == 4) {
+        expect(parts[3].equals("noreply"));
+        noreply = true;
+      }
+      return true;
+    } else if (isIncDecCmd()) {
+      expect(parts.length >= 3);
+      keys.add(parts[1]);
+      value = Long.parseLong(parts[2]);
+      if (parts.length == 4) {
+        expect(parts[3].equals("noreply"));
+        noreply = true;
+      }
+      return true;
+    } else if (isOtherCmd()) {
       return true;
     } else {
       throw new ParseException();

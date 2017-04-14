@@ -3,6 +3,7 @@ package com.codemacro.kvproxy.memcache;
 import com.codemacro.kvproxy.ConnectionListener;
 import net.rubyeye.xmemcached.MemcachedClient;
 import net.rubyeye.xmemcached.exception.MemcachedException;
+import net.rubyeye.xmemcached.utils.Protocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xnio.channels.Channels;
@@ -10,6 +11,7 @@ import org.xnio.channels.StreamSinkChannel;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
@@ -51,35 +53,80 @@ public class RequestHandler implements ConnectionListener {
       if (!finished) break;
       String cmd = parser.getCommand();
       if (parser.isStoreCmd()) {
-        String key = parser.getKeys().get(0);
-        byte[] content = parser.cloneData();
-        // TODO: pass client flag
-        boolean ret = client.set(key, (int) parser.getExpTime(), content);
-        if (!parser.isNoreply()) {
-          reply(ret ? "STORED" : "NOT_STORED", sink);
-        }
+        processStore(parser, sink);
       } else if (parser.isRetrieveCmd()) {
-        if (cmd.equals("get")) {
-          String key = parser.getKeys().get(0);
-          byte[] content = client.get(key);
-          ByteBuffer dstBuf = ByteBuffer.allocate(1024);
-          if (content == null) {
-            dstBuf.put("END".getBytes());
-          } else {
-            String header = String.format("VALUE %s %d %d\r\n", key, 0, content.length);
-            dstBuf.put(header.getBytes());
-            dstBuf.put(content);
-            dstBuf.put("\r\n".getBytes());
-            dstBuf.put("END\r\n".getBytes());
-          }
-          reply(dstBuf, sink);
-        } else {
-          logger.error("not supported command <{}>", parser.getCommand());
-          throw new ProtocolParser.ParseException();
+        ByteBuffer buf = getStoredData(parser);
+        reply(buf, sink);
+      } else if (cmd.equals("delete")) {
+        boolean ret = client.delete(parser.getKey(), (int) parser.getTime());
+        if (!parser.isNoreply()) {
+          reply(ret ? "DELETED" : "NOT_FOUND", sink);
         }
+      } else if (parser.isIncDecCmd()) {
+        long ret;
+        if (cmd.equals("incr")) {
+          ret = client.incr(parser.getKey(), parser.getValue());
+          // TODO: what if not exist ?
+        } else {
+          ret = client.decr(parser.getKey(), parser.getValue());
+        }
+        if (!parser.isNoreply()) {
+          reply(String.valueOf(ret), sink);
+        }
+      } else {
+        logger.error("not supported command <{}>", parser.getCommand());
+        throw new ProtocolParser.ParseException();
       }
       parser.reset();
     }
+  }
+
+  private void processStore(ProtocolParser parser, final StreamSinkChannel sink)
+      throws InterruptedException, MemcachedException, TimeoutException {
+    String key = parser.getKey();
+    String cmd = parser.getCommand();
+    byte[] content = parser.cloneData();
+    boolean ret = true;
+    if (cmd.equals("set")) {
+      ret = client.set(key, (int) parser.getTime(), content);
+    } else if (cmd.equals("add")) {
+      ret = client.add(key, (int) parser.getTime(), content);
+    } else if (cmd.equals("append")) {
+      ret = client.append(key, content);
+    } else if (cmd.equals("prepend")) {
+      ret = client.prepend(key, content);
+    }
+    if (!parser.isNoreply()) {
+      reply(ret ? "STORED" : "NOT_STORED", sink);
+    }
+  }
+
+  private ByteBuffer getStoredData(ProtocolParser parser)
+      throws InterruptedException, MemcachedException, TimeoutException {
+    List<String> keys = parser.getKeys();
+    Object[] results = new Object [keys.size()];
+    int size = 5; // END\r\n
+    for (int i = 0; i < keys.size(); ++i) {
+      results[i] = client.get(keys.get(i));
+      if (results[i] != null) {
+        size += ((byte[]) results[i]).length;
+        size += (keys.get(i).length() + 32);
+      }
+    }
+    ByteBuffer buf = ByteBuffer.allocate(size);
+    for (int i = 0; i < keys.size(); ++i) {
+      String key = keys.get(i);
+      Object result = results[i];
+      if (result != null) {
+        byte[] content = (byte[]) result;
+        String header = String.format("VALUE %s %d %d\r\n", key, 0, content.length);
+        buf.put(header.getBytes());
+        buf.put(content);
+        buf.put("\r\n".getBytes());
+      }
+    }
+    buf.put("END\r\n".getBytes());
+    return buf;
   }
 
   private void reply(String msg, final StreamSinkChannel sink) {
