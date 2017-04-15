@@ -16,14 +16,14 @@ public class ProtocolParser {
   private static final int STATE_DATA = 1;
   private static final int STATE_DONE = 2;
   private static final String[] STORE_CMDS = {"set", "add", "replace", "prepend", "append", "cas"};
-  private static final String[] OTHER_CMDS = {"stats", "flush_all", "version", "quit"};
+  private static final String[] OTHER_CMDS = {"stats", "version", "quit"};
   private List<ByteBuffer> buffers = new ArrayList<ByteBuffer>();
   private StringBuilder cmdline;
   private int state;
   private String command;
   private List<String> keys = new ArrayList<String>();
   private int flag;
-  private long time;
+  private int time;
   private int bytes;
   private int size;
   private long value;
@@ -93,7 +93,7 @@ public class ProtocolParser {
     return flag;
   }
 
-  public long getTime() {
+  public int getTime() {
     return time;
   }
 
@@ -179,7 +179,7 @@ public class ProtocolParser {
       expect(parts.length == 5 || parts.length == 6);
       keys.add(parts[1]);
       flag = Integer.parseInt(parts[2]);
-      time = Long.parseLong(parts[3]);
+      time = Integer.parseInt(parts[3]);
       bytes = Integer.parseInt(parts[4]);
       if (parts.length == 6) {
         expect(parts[5].equals("noreply"));
@@ -195,7 +195,7 @@ public class ProtocolParser {
     } else if (command.equals("delete")) {
       expect(parts.length >= 2);
       keys.add(parts[1]);
-      time = parts.length >= 3 ? Long.parseLong(parts[2]) : 0;
+      time = parts.length >= 3 ? Integer.parseInt(parts[2]) : 0;
       if (parts.length == 4) {
         expect(parts[3].equals("noreply"));
         noreply = true;
@@ -207,6 +207,12 @@ public class ProtocolParser {
       value = Long.parseLong(parts[2]);
       if (parts.length == 4) {
         expect(parts[3].equals("noreply"));
+        noreply = true;
+      }
+      return true;
+    } else if (command.equals("flush_all")) {
+      if (parts.length == 3) {
+        expect(parts[2].equals("noreply"));
         noreply = true;
       }
       return true;

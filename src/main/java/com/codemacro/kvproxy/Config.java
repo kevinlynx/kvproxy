@@ -11,7 +11,7 @@ public class Config {
   private static final String LOC_CONSTANT = "constant";
   public int port;
   public String locator;
-  public String[] servers;
+  public String locatorConf;
   public int ioThreadCount;
   public int clientPoolSize;
 
@@ -21,18 +21,9 @@ public class Config {
     Config conf = new Config();
     conf.port = Integer.parseInt(prop.getProperty("port", String.valueOf(11210)));
     conf.locator = prop.getProperty("locator", LOC_CONSTANT);
-    if (conf.locator.equals(LOC_CONSTANT)) {
-      conf.servers = prop.getProperty("constant.servers", "").split(",");
-      if (conf.servers.length == 0) {
-        throw new RuntimeException("invalid config, require servers");
-      }
-    }
+    conf.locatorConf = prop.getProperty("locatorConf", "");
     conf.ioThreadCount = Integer.parseInt(prop.getProperty("ioThreadCount"));
     conf.clientPoolSize = Integer.parseInt(prop.getProperty("clientPoolSize", String.valueOf(1)));
     return conf;
-  }
-
-  public boolean isConstantLoc() {
-    return locator.equals(LOC_CONSTANT);
   }
 }

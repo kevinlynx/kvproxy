@@ -14,7 +14,7 @@ import java.util.List;
 /**
  * Created on 2017/4/9.
  */
-public class MemcacheService implements Service, ServiceProvider {
+public class MemcacheService implements Service, ServiceProvider, LocatorListener {
   private static final Logger logger = LoggerFactory.getLogger(MemcacheService.class.getName());
   private MemcachedClient client;
 
@@ -23,6 +23,7 @@ public class MemcacheService implements Service, ServiceProvider {
 
   public void initialize(Config conf, ServerLocator locator) {
     logger.info("initialize memcache service");
+    locator.setListener(this);
     List<String> servers = locator.getList();
     try {
       MemcachedClientBuilder builder = new XMemcachedClientBuilder(
@@ -49,5 +50,23 @@ public class MemcacheService implements Service, ServiceProvider {
       sb.append(' ').append(addr);
     }
     return sb.toString();
+  }
+
+  public void addServers(List<String> servers) {
+    try {
+      String hosts = joinServers(servers);
+      logger.info("add servers: {}", hosts);
+      client.addServer(hosts);
+      logger.info("current servers:{}", client.getServersDescription());
+    } catch (IOException e) {
+      logger.error("add new servers failed:", e);
+    }
+  }
+
+  public void removeServers(List<String> servers) {
+    String hosts = joinServers(servers);
+    logger.info("remove servers:{}", hosts);
+    client.removeServer(hosts);
+    logger.info("current servers:{}", client.getServersDescription());
   }
 }

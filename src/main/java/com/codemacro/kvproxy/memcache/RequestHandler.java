@@ -12,6 +12,7 @@ import org.xnio.channels.StreamSinkChannel;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
@@ -58,8 +59,10 @@ public class RequestHandler implements ConnectionListener {
         ByteBuffer buf = getStoredData(parser);
         reply(buf, sink);
       } else if (cmd.equals("delete")) {
-        boolean ret = client.delete(parser.getKey(), (int) parser.getTime());
-        if (!parser.isNoreply()) {
+        if (parser.isNoreply()) {
+          client.deleteWithNoReply(parser.getKey());
+        } else {
+          boolean ret = client.delete(parser.getKey(), parser.getTime());
           reply(ret ? "DELETED" : "NOT_FOUND", sink);
         }
       } else if (parser.isIncDecCmd()) {
@@ -72,6 +75,13 @@ public class RequestHandler implements ConnectionListener {
         }
         if (!parser.isNoreply()) {
           reply(String.valueOf(ret), sink);
+        }
+      } else if (cmd.equals("flush_all")) {
+        if (parser.isNoreply()) {
+          client.flushAllWithNoReply();
+        } else {
+          client.flushAll();
+          reply("OK", sink);
         }
       } else {
         logger.error("not supported command <{}>", parser.getCommand());
@@ -87,16 +97,33 @@ public class RequestHandler implements ConnectionListener {
     String cmd = parser.getCommand();
     byte[] content = parser.cloneData();
     boolean ret = true;
+    boolean noreply = parser.isNoreply();
     if (cmd.equals("set")) {
-      ret = client.set(key, (int) parser.getTime(), content);
+      if (noreply) {
+        client.setWithNoReply(key, parser.getTime(), content);
+      } else {
+        ret = client.set(key, parser.getTime(), content);
+      }
     } else if (cmd.equals("add")) {
-      ret = client.add(key, (int) parser.getTime(), content);
+      if (noreply) {
+        client.addWithNoReply(key, parser.getTime(), content);
+      } else {
+        ret = client.add(key, parser.getTime(), content);
+      }
     } else if (cmd.equals("append")) {
-      ret = client.append(key, content);
+      if (noreply) {
+        client.appendWithNoReply(key, content);
+      } else {
+        ret = client.append(key, content);
+      }
     } else if (cmd.equals("prepend")) {
-      ret = client.prepend(key, content);
+      if (noreply) {
+        client.prependWithNoReply(key, content);
+      } else {
+        ret = client.prepend(key, content);
+      }
     }
-    if (!parser.isNoreply()) {
+    if (!noreply) {
       reply(ret ? "STORED" : "NOT_STORED", sink);
     }
   }
@@ -104,26 +131,22 @@ public class RequestHandler implements ConnectionListener {
   private ByteBuffer getStoredData(ProtocolParser parser)
       throws InterruptedException, MemcachedException, TimeoutException {
     List<String> keys = parser.getKeys();
-    Object[] results = new Object [keys.size()];
+    Map<String, byte[]> results = client.get(keys);
     int size = 5; // END\r\n
-    for (int i = 0; i < keys.size(); ++i) {
-      results[i] = client.get(keys.get(i));
-      if (results[i] != null) {
-        size += ((byte[]) results[i]).length;
-        size += (keys.get(i).length() + 32);
-      }
+    for (Map.Entry<String, byte[]> entry : results.entrySet()) {
+      String key = entry.getKey();
+      byte[] content = entry.getValue();
+      size += content.length;
+      size += (key.length() + 32);
     }
     ByteBuffer buf = ByteBuffer.allocate(size);
-    for (int i = 0; i < keys.size(); ++i) {
-      String key = keys.get(i);
-      Object result = results[i];
-      if (result != null) {
-        byte[] content = (byte[]) result;
-        String header = String.format("VALUE %s %d %d\r\n", key, 0, content.length);
-        buf.put(header.getBytes());
-        buf.put(content);
-        buf.put("\r\n".getBytes());
-      }
+    for (Map.Entry<String, byte[]> entry : results.entrySet()) {
+      String key = entry.getKey();
+      byte[] content = entry.getValue();
+      String header = String.format("VALUE %s %d %d\r\n", key, 0, content.length);
+      buf.put(header.getBytes());
+      buf.put(content);
+      buf.put("\r\n".getBytes());
     }
     buf.put("END\r\n".getBytes());
     return buf;
