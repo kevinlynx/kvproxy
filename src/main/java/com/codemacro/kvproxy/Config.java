@@ -14,6 +14,7 @@ public class Config {
   public String locatorConf;
   public int ioThreadCount;
   public int clientPoolSize;
+  public String groupClientConf;
 
   public static Config build(InputStream stream) throws IOException {
     Properties prop = new Properties();
@@ -24,6 +25,7 @@ public class Config {
     conf.locatorConf = prop.getProperty("locatorConf", "");
     conf.ioThreadCount = Integer.parseInt(prop.getProperty("ioThreadCount"));
     conf.clientPoolSize = Integer.parseInt(prop.getProperty("clientPoolSize", String.valueOf(1)));
+    conf.groupClientConf = prop.getProperty("groupClientConf");
     return conf;
   }
 }

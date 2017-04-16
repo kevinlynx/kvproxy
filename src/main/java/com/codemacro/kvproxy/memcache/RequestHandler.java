@@ -22,9 +22,9 @@ import java.util.concurrent.TimeoutException;
 public class RequestHandler implements ConnectionListener {
   private static final Logger logger = LoggerFactory.getLogger(RequestHandler.class.getName());
   private ProtocolParser parser;
-  private final MemcachedClient client;
+  private final KVClient client;
 
-  public RequestHandler(MemcachedClient client) {
+  public RequestHandler(KVClient client) {
     parser = new ProtocolParser();
     this.client = client;
   }
