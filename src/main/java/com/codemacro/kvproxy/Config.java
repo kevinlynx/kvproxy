@@ -25,7 +25,7 @@ public class Config {
     conf.locatorConf = prop.getProperty("locatorConf", "");
     conf.ioThreadCount = Integer.parseInt(prop.getProperty("ioThreadCount"));
     conf.clientPoolSize = Integer.parseInt(prop.getProperty("clientPoolSize", String.valueOf(1)));
-    conf.groupClientConf = prop.getProperty("groupClientConf");
+    conf.groupClientConf = prop.getProperty("groupClientConf", "");
     return conf;
   }
 }

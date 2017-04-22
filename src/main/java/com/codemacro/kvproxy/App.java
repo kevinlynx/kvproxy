@@ -1,13 +1,10 @@
 package com.codemacro.kvproxy;
 
-import com.codemacro.kvproxy.locator.ConstantLocator;
 import com.codemacro.kvproxy.memcache.MemcacheService;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.ServiceLoader;
 
 /**
  * Created on 2017/4/9.

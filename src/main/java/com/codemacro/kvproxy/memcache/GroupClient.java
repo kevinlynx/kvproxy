@@ -46,9 +46,11 @@ public class GroupClient implements KVClient {
     if (conf.groupClientConf == null) {
       throw new RuntimeException("require group client conf");
     }
-    for (String name : conf.groupClientConf.split(",")) {
-      KVClient client = createClient(conf, name, locator);
-      slaves.put(name, client);
+    if (!conf.groupClientConf.isEmpty()) {
+      for (String name : conf.groupClientConf.split(",")) {
+        KVClient client = createClient(conf, name.trim(), locator);
+        slaves.put(name, client);
+      }
     }
   }
 
