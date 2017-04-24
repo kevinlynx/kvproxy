@@ -44,11 +44,13 @@ public class RequestHandler implements ConnectionListener {
       e.printStackTrace();
     } catch (TimeoutException e) {
       e.printStackTrace();
+    } catch (IOException e) {
+      e.printStackTrace();
     }
   }
 
   private void handleRequest(final ByteBuffer buffer, final StreamSinkChannel sink)
-      throws ExecutionException, InterruptedException, TimeoutException, MemcachedException {
+      throws ExecutionException, InterruptedException, TimeoutException, MemcachedException, IOException {
     while (buffer.hasRemaining()) { // commands after a noreply `set'
       boolean finished = parser.consume(buffer);
       if (!finished) break;
@@ -76,6 +78,11 @@ public class RequestHandler implements ConnectionListener {
         if (!parser.isNoreply()) {
           reply(String.valueOf(ret), sink);
         }
+      } else if (cmd.equals("quit")) {
+        sink.close();
+        return;
+      } else if (cmd.equals("stats")) {
+        reply("not supported now", sink);
       } else if (cmd.equals("flush_all")) {
         if (parser.isNoreply()) {
           client.flushAllWithNoReply();
