@@ -14,6 +14,7 @@ public class Config {
   public String locatorConf;
   public int ioThreadCount;
   public int clientPoolSize;
+  public int clientOpTimeout;
   public String groupClientConf;
 
   public static Config build(InputStream stream) throws IOException {
@@ -25,6 +26,7 @@ public class Config {
     conf.locatorConf = prop.getProperty("locatorConf", "");
     conf.ioThreadCount = Integer.parseInt(prop.getProperty("ioThreadCount"));
     conf.clientPoolSize = Integer.parseInt(prop.getProperty("clientPoolSize", String.valueOf(1)));
+    conf.clientOpTimeout = Integer.parseInt(prop.getProperty("clientOpTimeout", String.valueOf(3)));
     conf.groupClientConf = prop.getProperty("groupClientConf", "");
     return conf;
   }

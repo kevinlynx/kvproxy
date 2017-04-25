@@ -56,11 +56,11 @@ public class MemClient implements KVClient {
     try {
       return f.invoke();
     } catch (InterruptedException e) {
-      logger.error("memcache exception:", e);
+      logger.error("memcache interrupt:", e);
     } catch (MemcachedException e) {
       logger.error("memcache exception:", e);
-    } catch (TimeoutException e) {
-      logger.error("memcache exception:", e);
+    } catch (TimeoutException e) { // TODO: throw this to request handler, response error to client
+      logger.error("memcache timeout:", e);
     }
     return def;
   }

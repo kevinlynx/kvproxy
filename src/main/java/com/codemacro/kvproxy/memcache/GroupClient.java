@@ -4,6 +4,7 @@ import com.codemacro.kvproxy.Config;
 import com.codemacro.kvproxy.LocatorListener;
 import com.codemacro.kvproxy.ServerLocator;
 import com.codemacro.kvproxy.locator.GroupLocator;
+import net.rubyeye.xmemcached.MemcachedClient;
 import net.rubyeye.xmemcached.MemcachedClientBuilder;
 import net.rubyeye.xmemcached.XMemcachedClientBuilder;
 import net.rubyeye.xmemcached.utils.AddrUtil;
@@ -186,7 +187,9 @@ public class GroupClient implements KVClient {
       MemcachedClientBuilder builder = new XMemcachedClientBuilder(
           AddrUtil.getAddresses(joinServers(servers)));
       builder.setConnectionPoolSize(conf.clientPoolSize);
-      KVClient client = new MemClient(builder.build());
+      MemcachedClient memClient = builder.build();
+      memClient.setOpTimeout(conf.clientOpTimeout);
+      KVClient client = new MemClient(memClient);
       locator.setListener(new ClientListener(client));
       return client;
     } catch (IOException e) {
