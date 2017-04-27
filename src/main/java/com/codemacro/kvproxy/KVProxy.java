@@ -28,7 +28,7 @@ public class KVProxy implements ChannelListener<AcceptingChannel<StreamConnectio
   public boolean start(Config conf) throws IOException {
     OptionMap options = OptionMap.builder().set(Options.WORKER_IO_THREADS, conf.ioThreadCount).getMap();
     worker = Xnio.getInstance().createWorker(options);
-    service.initialize(conf, locator);
+    service.initialize(worker, conf, locator);
     server = worker.createStreamConnectionServer(new InetSocketAddress(conf.port), this, OptionMap.EMPTY);
     server.resumeAccepts();
     return true;
@@ -39,7 +39,7 @@ public class KVProxy implements ChannelListener<AcceptingChannel<StreamConnectio
       StreamConnection accepted;
       while ((accepted = channel.accept()) != null) {
         logger.debug("accept a new connection: " + accepted.getPeerAddress());
-        Connection conn = new Connection(accepted, service.newListener());
+        Connection conn = new Connection(worker, accepted, service.newListener());
         conn.initialize();
       }
     } catch (IOException ignored) {

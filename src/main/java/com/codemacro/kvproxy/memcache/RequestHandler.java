@@ -14,6 +14,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -23,8 +24,10 @@ public class RequestHandler implements ConnectionListener {
   private static final Logger logger = LoggerFactory.getLogger(RequestHandler.class.getName());
   private ProtocolParser parser;
   private final KVClient client;
+  private final ExecutorService executor;
 
-  public RequestHandler(KVClient client) {
+  public RequestHandler(ExecutorService executor, KVClient client) {
+    this.executor = executor;
     parser = new ProtocolParser();
     this.client = client;
   }
@@ -36,65 +39,77 @@ public class RequestHandler implements ConnectionListener {
       logger.error("parse exception", e);
       reply("CLIENT_ERROR protocol_failed", sink);
       e.printStackTrace();
-    } catch (InterruptedException e) {
-      e.printStackTrace();
-    } catch (ExecutionException e) {
-      e.printStackTrace();
-    } catch (MemcachedException e) {
-      e.printStackTrace();
-    } catch (TimeoutException e) {
-      e.printStackTrace();
-    } catch (IOException e) {
-      e.printStackTrace();
     }
   }
 
-  private void handleRequest(final ByteBuffer buffer, final StreamSinkChannel sink)
-      throws ExecutionException, InterruptedException, TimeoutException, MemcachedException, IOException {
+  private void handleRequest(final ByteBuffer buffer, final StreamSinkChannel sink) {
     while (buffer.hasRemaining()) { // commands after a noreply `set'
       boolean finished = parser.consume(buffer);
       if (!finished) break;
-      String cmd = parser.getCommand();
-      if (parser.isStoreCmd()) {
-        processStore(parser, sink);
-      } else if (parser.isRetrieveCmd()) {
-        ByteBuffer buf = getStoredData(parser);
-        reply(buf, sink);
-      } else if (cmd.equals("delete")) {
-        if (parser.isNoreply()) {
-          client.deleteWithNoReply(parser.getKey());
-        } else {
-          boolean ret = client.delete(parser.getKey(), parser.getTime());
-          reply(ret ? "DELETED" : "NOT_FOUND", sink);
+      final ProtocolParser dupParser = parser;
+      parser = new ProtocolParser();
+      executor.execute(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            handleRequest0(dupParser, sink);
+          } catch (ExecutionException e) {
+            e.printStackTrace();
+          } catch (InterruptedException e) {
+            e.printStackTrace();
+          } catch (TimeoutException e) {
+            e.printStackTrace();
+          } catch (MemcachedException e) {
+            e.printStackTrace();
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
         }
-      } else if (parser.isIncDecCmd()) {
-        long ret;
-        if (cmd.equals("incr")) {
-          ret = client.incr(parser.getKey(), parser.getValue());
-          // TODO: what if not exist ?
-        } else {
-          ret = client.decr(parser.getKey(), parser.getValue());
-        }
-        if (!parser.isNoreply()) {
-          reply(String.valueOf(ret), sink);
-        }
-      } else if (cmd.equals("quit")) {
-        sink.close();
-        return;
-      } else if (cmd.equals("stats")) {
-        reply("not supported now", sink);
-      } else if (cmd.equals("flush_all")) {
-        if (parser.isNoreply()) {
-          client.flushAllWithNoReply();
-        } else {
-          client.flushAll();
-          reply("OK", sink);
-        }
+      });
+    }
+  }
+
+  private void handleRequest0(final ProtocolParser parser, final StreamSinkChannel sink)
+      throws ExecutionException, InterruptedException, TimeoutException, MemcachedException, IOException {
+    String cmd = parser.getCommand();
+    if (parser.isStoreCmd()) {
+      processStore(parser, sink);
+    } else if (parser.isRetrieveCmd()) {
+      ByteBuffer buf = getStoredData(parser);
+      reply(buf, sink);
+    } else if (cmd.equals("delete")) {
+      if (parser.isNoreply()) {
+        client.deleteWithNoReply(parser.getKey());
       } else {
-        logger.error("not supported command <{}>", parser.getCommand());
-        throw new ProtocolParser.ParseException();
+        boolean ret = client.delete(parser.getKey(), parser.getTime());
+        reply(ret ? "DELETED" : "NOT_FOUND", sink);
       }
-      parser.reset();
+    } else if (parser.isIncDecCmd()) {
+      long ret;
+      if (cmd.equals("incr")) {
+        ret = client.incr(parser.getKey(), parser.getValue());
+        // TODO: what if not exist ?
+      } else {
+        ret = client.decr(parser.getKey(), parser.getValue());
+      }
+      if (!parser.isNoreply()) {
+        reply(String.valueOf(ret), sink);
+      }
+    } else if (cmd.equals("quit")) {
+      sink.close();
+      return;
+    } else if (cmd.equals("stats")) {
+      reply("not supported now", sink);
+    } else if (cmd.equals("flush_all")) {
+      if (parser.isNoreply()) {
+        client.flushAllWithNoReply();
+      } else {
+        client.flushAll();
+        reply("OK", sink);
+      }
+    } else {
+      logger.error("not supported command <{}>", parser.getCommand());
+      throw new ProtocolParser.ParseException("not supported command:" + parser.getCommand());
     }
   }
 

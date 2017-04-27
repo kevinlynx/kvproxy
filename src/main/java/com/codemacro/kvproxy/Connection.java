@@ -8,6 +8,7 @@ import org.xnio.channels.StreamSourceChannel;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.ExecutorService;
 
 /**
  * Created on 2017/4/9.
@@ -16,8 +17,10 @@ public class Connection implements ChannelListener<StreamSourceChannel> {
   private static final Logger logger = LoggerFactory.getLogger(Connection.class.getName());
   private final StreamConnection stream;
   private final ConnectionListener listener;
+  private final ExecutorService executor;
 
-  public Connection(StreamConnection stream, final ConnectionListener listener) {
+  public Connection(ExecutorService executor, StreamConnection stream, final ConnectionListener listener) {
+    this.executor = executor;
     this.stream = stream;
     this.listener = listener;
   }
@@ -45,7 +48,13 @@ public class Connection implements ChannelListener<StreamSourceChannel> {
         channel.resumeReads();
       }
     } catch (IOException e) {
+      logger.warn("read channel exception:", e);
       e.printStackTrace();
+      try {
+        channel.close();
+      } catch (IOException e1) {
+        e1.printStackTrace();
+      }
     }
   }
 }
