@@ -31,7 +31,7 @@ public class Connection implements ChannelListener<StreamSourceChannel> {
   }
 
   public void handleEvent(StreamSourceChannel channel) {
-    final ByteBuffer buffer = ByteBuffer.allocate(1024);
+    final ByteBuffer buffer = ByteBuffer.allocate(4096);
     int res;
     try {
       while ((res = channel.read(buffer)) > 0) {

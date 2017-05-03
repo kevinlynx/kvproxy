@@ -66,9 +66,9 @@
       <version>1.7.25</version>
     </dependency>
     <dependency>
-      <groupId>com.googlecode.xmemcached</groupId>
-      <artifactId>xmemcached</artifactId>
-      <version>2.3.1</version>
+      <groupId>com.spotify</groupId>
+      <artifactId>folsom</artifactId>
+      <version>0.7.3</version>
     </dependency>
     <dependency>
       <groupId>junit</groupId>

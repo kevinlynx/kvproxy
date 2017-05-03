@@ -1,21 +1,17 @@
 package com.codemacro.kvproxy.memcache;
 
 import com.codemacro.kvproxy.ConnectionListener;
-import net.rubyeye.xmemcached.MemcachedClient;
-import net.rubyeye.xmemcached.exception.MemcachedException;
-import net.rubyeye.xmemcached.utils.Protocol;
+import com.google.common.util.concurrent.FutureCallback;
+import com.spotify.folsom.MemcacheStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xnio.channels.Channels;
 import org.xnio.channels.StreamSinkChannel;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeoutException;
 
 /**
  * Created on 2017/4/12.
@@ -38,7 +34,6 @@ public class RequestHandler implements ConnectionListener {
     } catch (ProtocolParser.ParseException e) {
       logger.error("parse exception", e);
       reply("CLIENT_ERROR protocol_failed", sink);
-      e.printStackTrace();
     }
   }
 
@@ -46,132 +41,106 @@ public class RequestHandler implements ConnectionListener {
     while (buffer.hasRemaining()) { // commands after a noreply `set'
       boolean finished = parser.consume(buffer);
       if (!finished) break;
-      final ProtocolParser dupParser = parser;
-      parser = new ProtocolParser();
-      executor.execute(new Runnable() {
-        @Override
-        public void run() {
-          try {
-            handleRequest0(dupParser, sink);
-          } catch (ExecutionException e) {
-            e.printStackTrace();
-          } catch (InterruptedException e) {
-            e.printStackTrace();
-          } catch (TimeoutException e) {
-            e.printStackTrace();
-          } catch (MemcachedException e) {
-            e.printStackTrace();
-          } catch (IOException e) {
-            e.printStackTrace();
-          }
-        }
-      });
+      try {
+        handleRequest0(parser, sink);
+      } catch (IOException e) {
+        logger.error("handle request exception", e);
+      }
+      parser.reset();
     }
   }
 
   private void handleRequest0(final ProtocolParser parser, final StreamSinkChannel sink)
-      throws ExecutionException, InterruptedException, TimeoutException, MemcachedException, IOException {
+      throws IOException {
     String cmd = parser.getCommand();
     if (parser.isStoreCmd()) {
       processStore(parser, sink);
     } else if (parser.isRetrieveCmd()) {
-      ByteBuffer buf = getStoredData(parser);
-      reply(buf, sink);
+      if (cmd.equals("get")) {
+        final String key = parser.getKey();
+        client.asyncGet(key, new FutureCallback<byte[]>() {
+          @Override
+          public void onSuccess(@Nullable byte[] bytes) {
+            if (bytes != null) {
+              ByteBuffer buf = formatGetResp(key, bytes);
+              reply(buf, sink);
+            } else {
+              reply("END", sink);
+            }
+          }
+
+          @Override
+          public void onFailure(Throwable throwable) {
+            logger.error("[get] failed", throwable);
+            replyError("failure", sink);
+          }
+        });
+      } else {
+        replyError("not_impl", sink);
+      }
     } else if (cmd.equals("delete")) {
-      if (parser.isNoreply()) {
-        client.deleteWithNoReply(parser.getKey());
-      } else {
-        boolean ret = client.delete(parser.getKey(), parser.getTime());
-        reply(ret ? "DELETED" : "NOT_FOUND", sink);
-      }
-    } else if (parser.isIncDecCmd()) {
-      long ret;
-      if (cmd.equals("incr")) {
-        ret = client.incr(parser.getKey(), parser.getValue());
-        // TODO: what if not exist ?
-      } else {
-        ret = client.decr(parser.getKey(), parser.getValue());
-      }
-      if (!parser.isNoreply()) {
-        reply(String.valueOf(ret), sink);
-      }
+      final String key = parser.getKey();
+      client.asyncDelete(key, new FutureCallback<MemcacheStatus>() {
+        @Override
+        public void onSuccess(@Nullable MemcacheStatus memcacheStatus) {
+          if (!parser.isNoreply()) {
+            reply(memcacheStatus.equals(MemcacheStatus.OK) ? "DELETED" : "NOT_FOUND", sink);
+          }
+        }
+
+        @Override
+        public void onFailure(Throwable throwable) {
+          logger.error("[delete] failed", throwable);
+          replyError("failure", sink);
+        }
+      });
     } else if (cmd.equals("quit")) {
       sink.close();
       return;
-    } else if (cmd.equals("stats")) {
-      reply("not supported now", sink);
-    } else if (cmd.equals("flush_all")) {
-      if (parser.isNoreply()) {
-        client.flushAllWithNoReply();
-      } else {
-        client.flushAll();
-        reply("OK", sink);
-      }
     } else {
       logger.error("not supported command <{}>", parser.getCommand());
-      throw new ProtocolParser.ParseException("not supported command:" + parser.getCommand());
+      replyError("not_impl", sink);
     }
   }
 
-  private void processStore(ProtocolParser parser, final StreamSinkChannel sink)
-      throws InterruptedException, MemcachedException, TimeoutException {
+  private void processStore(ProtocolParser parser, final StreamSinkChannel sink) {
     String key = parser.getKey();
     String cmd = parser.getCommand();
     byte[] content = parser.cloneData();
-    boolean ret = true;
     boolean noreply = parser.isNoreply();
     if (cmd.equals("set")) {
-      if (noreply) {
-        client.setWithNoReply(key, parser.getTime(), content);
-      } else {
-        ret = client.set(key, parser.getTime(), content);
-      }
-    } else if (cmd.equals("add")) {
-      if (noreply) {
-        client.addWithNoReply(key, parser.getTime(), content);
-      } else {
-        ret = client.add(key, parser.getTime(), content);
-      }
-    } else if (cmd.equals("append")) {
-      if (noreply) {
-        client.appendWithNoReply(key, content);
-      } else {
-        ret = client.append(key, content);
-      }
-    } else if (cmd.equals("prepend")) {
-      if (noreply) {
-        client.prependWithNoReply(key, content);
-      } else {
-        ret = client.prepend(key, content);
-      }
-    }
-    if (!noreply) {
-      reply(ret ? "STORED" : "NOT_STORED", sink);
+      client.asyncSet(key, content, parser.getTime(), new FutureCallback<MemcacheStatus>() {
+        @Override
+        public void onSuccess(@Nullable MemcacheStatus memcacheStatus) {
+          if (!noreply) {
+            boolean ret = memcacheStatus.equals(MemcacheStatus.OK);
+            reply(ret ? "STORED" : "NOT_STORED", sink);
+          }
+        }
+
+        @Override
+        public void onFailure(Throwable throwable) {
+          logger.error("[set] failed", throwable);
+          replyError("failure", sink);
+        }
+      });
+    } else {
+      replyError("not_impl", sink);
     }
   }
 
-  private ByteBuffer getStoredData(ProtocolParser parser)
-      throws InterruptedException, MemcachedException, TimeoutException {
-    List<String> keys = parser.getKeys();
-    Map<String, byte[]> results = client.get(keys);
-    int size = 5; // END\r\n
-    for (Map.Entry<String, byte[]> entry : results.entrySet()) {
-      String key = entry.getKey();
-      byte[] content = entry.getValue();
-      size += content.length;
-      size += (key.length() + 32);
-    }
-    ByteBuffer buf = ByteBuffer.allocate(size);
-    for (Map.Entry<String, byte[]> entry : results.entrySet()) {
-      String key = entry.getKey();
-      byte[] content = entry.getValue();
-      String header = String.format("VALUE %s %d %d\r\n", key, 0, content.length);
-      buf.put(header.getBytes());
-      buf.put(content);
-      buf.put("\r\n".getBytes());
-    }
+  private ByteBuffer formatGetResp(String key, byte[] content) {
+    ByteBuffer buf = ByteBuffer.allocate(content.length + key.length() + 32);
+    String header = String.format("VALUE %s %d %d\r\n", key, 0, content.length);
+    buf.put(header.getBytes());
+    buf.put(content);
+    buf.put("\r\n".getBytes());
     buf.put("END\r\n".getBytes());
     return buf;
+  }
+
+  private void replyError(String msg, final StreamSinkChannel sink) {
+    reply("SERVER_ERROR " + msg, sink);
   }
 
   private void reply(String msg, final StreamSinkChannel sink) {
