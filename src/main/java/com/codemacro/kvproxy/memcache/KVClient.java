@@ -1,9 +1,7 @@
 package com.codemacro.kvproxy.memcache;
 
-import net.rubyeye.xmemcached.exception.MemcachedException;
-
-import java.util.Collection;
-import java.util.Map;
+import com.google.common.util.concurrent.FutureCallback;
+import com.spotify.folsom.MemcacheStatus;
 
 /**
  * Created on 2017/4/16.
@@ -11,19 +9,8 @@ import java.util.Map;
 public interface KVClient {
   void addServers(String hosts);
   void removeServers(String hosts);
-  void deleteWithNoReply(String key);
-  boolean delete(String key, int time);
-  long incr(String key, long inc);
-  long decr(String key, long dec);
-  void flushAllWithNoReply();
-  void flushAll();
-  void setWithNoReply(String key, int time, byte[] content);
-  boolean set(String key, int time, byte[] content);
-  void addWithNoReply(String key, int time, byte[] content);
-  boolean add(String key, int time, byte[] content);
-  void appendWithNoReply(String key, byte[] content);
-  boolean append(String key, byte[] content);
-  void prependWithNoReply(String key, byte[] content);
-  boolean prepend(String key, byte[] content);
-  Map<String, byte[]> get(Collection<String> keys);
+
+  void asyncGet(String key, FutureCallback<byte[]> callback);
+  void asyncSet(String key, byte[] content, int ttl, FutureCallback<MemcacheStatus> callback);
+  void asyncDelete(String key, FutureCallback<MemcacheStatus> callback);
 }
