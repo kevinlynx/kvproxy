@@ -1,14 +1,13 @@
 package com.codemacro.kvproxy.memcache;
 
 import com.codemacro.kvproxy.ConnectionListener;
-import com.google.common.util.concurrent.FutureCallback;
-import com.spotify.folsom.MemcacheStatus;
+import com.codemacro.kvproxy.client.FutureCallback;
+import com.codemacro.kvproxy.client.MemcacheStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xnio.channels.Channels;
 import org.xnio.channels.StreamSinkChannel;
 
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
@@ -60,7 +59,7 @@ public class RequestHandler implements ConnectionListener {
         final String key = parser.getKey();
         client.asyncGet(key, new FutureCallback<byte[]>() {
           @Override
-          public void onSuccess(@Nullable byte[] bytes) {
+          public void onSuccess(byte[] bytes) {
             if (bytes != null) {
               ByteBuffer buf = formatGetResp(key, bytes);
               reply(buf, sink);
@@ -82,9 +81,9 @@ public class RequestHandler implements ConnectionListener {
       final String key = parser.getKey();
       client.asyncDelete(key, new FutureCallback<MemcacheStatus>() {
         @Override
-        public void onSuccess(@Nullable MemcacheStatus memcacheStatus) {
+        public void onSuccess(MemcacheStatus memcacheStatus) {
           if (!parser.isNoreply()) {
-            reply(memcacheStatus.equals(MemcacheStatus.OK) ? "DELETED" : "NOT_FOUND", sink);
+            reply(memcacheStatus.equals(MemcacheStatus.DELETED) ? "DELETED" : "NOT_FOUND", sink);
           }
         }
 
@@ -111,9 +110,9 @@ public class RequestHandler implements ConnectionListener {
     if (cmd.equals("set")) {
       client.asyncSet(key, content, parser.getTime(), new FutureCallback<MemcacheStatus>() {
         @Override
-        public void onSuccess(@Nullable MemcacheStatus memcacheStatus) {
+        public void onSuccess(MemcacheStatus memcacheStatus) {
           if (!noreply) {
-            boolean ret = memcacheStatus.equals(MemcacheStatus.OK);
+            boolean ret = memcacheStatus.equals(MemcacheStatus.STORED);
             reply(ret ? "STORED" : "NOT_STORED", sink);
           }
         }

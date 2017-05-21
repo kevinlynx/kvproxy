@@ -9,4 +9,8 @@
 * service abstract
     * memcache implementation
 * replica in cluster
-* local cache
+* failover node
+* prefix routing
+* local cache (multi-level caches)
+* metric
+* dynamic server changing

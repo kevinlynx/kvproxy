@@ -1,18 +1,16 @@
 package com.codemacro.kvproxy.memcache;
 
 import com.codemacro.kvproxy.*;
+import com.codemacro.kvproxy.client.MemcacheClient;
+import com.codemacro.kvproxy.client.MemcacheClientBuilder;
 import com.codemacro.kvproxy.locator.GroupLocator;
-import com.google.common.net.HostAndPort;
-import com.spotify.folsom.ConnectFuture;
-import com.spotify.folsom.MemcacheClient;
-import com.spotify.folsom.MemcacheClientBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.xnio.XnioWorker;
 
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
 
 /**
  * Created on 2017/4/9.
@@ -20,21 +18,21 @@ import java.util.concurrent.ExecutorService;
 public class MemcacheService implements Service, ServiceProvider, GroupClient.ClientCreator {
   private static final Logger logger = LoggerFactory.getLogger(MemcacheService.class.getName());
   private KVClient client;
-  private ExecutorService executor;
+  private XnioWorker worker;
 
-  public void initialize(ExecutorService executor, Config conf, ServerLocator locator) {
+  public void initialize(XnioWorker worker, Config conf, ServerLocator locator) {
     logger.info("initialize memcache service");
-    this.executor = executor;
+    this.worker = worker;
     if (!(locator instanceof GroupLocator)) {
       throw new RuntimeException("require group locator");
     } // OR we can create a single client
-    GroupClient groupClient = new GroupClient(executor);
+    GroupClient groupClient = new GroupClient(worker);
     groupClient.initialize(conf, (GroupLocator) locator, this);
     client = groupClient;
   }
 
   public ConnectionListener newListener() {
-    return new RequestHandler(executor, client);
+    return new RequestHandler(worker, client);
   }
 
   public Service newService() {
@@ -43,28 +41,18 @@ public class MemcacheService implements Service, ServiceProvider, GroupClient.Cl
 
   @Override
   public KVClient create(Config conf, ServerLocator locator) {
-    try {
-      List<String> servers = locator.getList();
-      final MemcacheClient<byte[]> client = MemcacheClientBuilder.newByteArrayClient()
-          .withAddresses(parseServers(servers))
-          .withRequestTimeoutMillis(conf.clientOpTimeout)
-          .withConnections(conf.clientPoolSize)
-          .connectAscii();
-      ConnectFuture.connectFuture(client).get();
-      KVClient kvclient = new MemClient(client, executor);
-      return kvclient;
-    } catch (InterruptedException e) {
-      logger.error("create client failed", e);
-    } catch (ExecutionException e) {
-      logger.error("create client failed", e);
-    }
-    return null;
+    List<String> servers = locator.getList();
+    MemcacheClientBuilder builder = new MemcacheClientBuilder();
+    final MemcacheClient client = builder.setAddrs(parseServers(servers)).setWorker(worker).build();
+    KVClient kvclient = new MemClient(client, worker);
+    return kvclient;
   }
 
-  private List<HostAndPort> parseServers(List<String> servers) {
-    List<HostAndPort> addrs = new ArrayList<>();
+  private List<InetSocketAddress> parseServers(List<String> servers) {
+    List<InetSocketAddress> addrs = new ArrayList<>();
     for (String s : servers) {
-      addrs.add(HostAndPort.fromString(s));
+      String[] vec = s.split(":");
+      addrs.add(new InetSocketAddress(vec[0], Integer.parseInt(vec[1])));
     }
     return addrs;
   }

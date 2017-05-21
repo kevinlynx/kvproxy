@@ -3,9 +3,9 @@ package com.codemacro.kvproxy.memcache;
 import com.codemacro.kvproxy.Config;
 import com.codemacro.kvproxy.LocatorListener;
 import com.codemacro.kvproxy.ServerLocator;
+import com.codemacro.kvproxy.client.FutureCallback;
+import com.codemacro.kvproxy.client.MemcacheStatus;
 import com.codemacro.kvproxy.locator.GroupLocator;
-import com.google.common.util.concurrent.FutureCallback;
-import com.spotify.folsom.MemcacheStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +51,7 @@ public class GroupClient implements KVClient {
     if (!conf.groupClientConf.isEmpty()) {
       for (String name : conf.groupClientConf.split(",")) {
         KVClient client = createClient(conf, name.trim(), locator, creator);
+        logger.info("add slave {}", name);
         slaves.put(name, client);
       }
     }

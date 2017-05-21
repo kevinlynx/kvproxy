@@ -1,11 +1,11 @@
 package com.codemacro.kvproxy;
 
-import java.util.concurrent.ExecutorService;
+import org.xnio.XnioWorker;
 
 /**
  * Created on 2017/4/9.
  */
 public interface Service {
-  void initialize(ExecutorService executor, Config conf, ServerLocator locator);
+  void initialize(XnioWorker worker, Config conf, ServerLocator locator);
   ConnectionListener newListener();
 }

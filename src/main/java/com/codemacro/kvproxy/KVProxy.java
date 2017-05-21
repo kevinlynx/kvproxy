@@ -34,6 +34,7 @@ public class KVProxy implements ChannelListener<AcceptingChannel<StreamConnectio
     return true;
   }
 
+  @Override
   public void handleEvent(AcceptingChannel<StreamConnection> channel) {
     try {
       StreamConnection accepted;
