@@ -30,6 +30,7 @@ public class Connection implements ChannelListener<StreamSourceChannel> {
     stream.getSourceChannel().resumeReads();
   }
 
+  @Override
   public void handleEvent(StreamSourceChannel channel) {
     final ByteBuffer buffer = ByteBuffer.allocate(4096);
     int res;

@@ -1,7 +1,7 @@
 package com.codemacro.kvproxy.memcache;
 
-import com.google.common.util.concurrent.FutureCallback;
-import com.spotify.folsom.MemcacheStatus;
+import com.codemacro.kvproxy.client.FutureCallback;
+import com.codemacro.kvproxy.client.MemcacheStatus;
 
 /**
  * Created on 2017/4/16.
