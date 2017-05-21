@@ -78,21 +78,7 @@ public class RequestHandler implements ConnectionListener {
         replyError("not_impl", sink);
       }
     } else if (cmd.equals("delete")) {
-      final String key = parser.getKey();
-      client.asyncDelete(key, new FutureCallback<MemcacheStatus>() {
-        @Override
-        public void onSuccess(MemcacheStatus memcacheStatus) {
-          if (!parser.isNoreply()) {
-            reply(memcacheStatus.equals(MemcacheStatus.DELETED) ? "DELETED" : "NOT_FOUND", sink);
-          }
-        }
-
-        @Override
-        public void onFailure(Throwable throwable) {
-          logger.error("[delete] failed", throwable);
-          replyError("failure", sink);
-        }
-      });
+      replyError("not_impl", sink);
     } else if (cmd.equals("quit")) {
       sink.close();
       return;

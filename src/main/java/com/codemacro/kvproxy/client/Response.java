@@ -96,6 +96,8 @@ public class Response {
     valueParser = new ValueParser();
   }
 
+  public String getMsg() { return msg; }
+
   public MemcacheStatus getStatus() {
     MemcacheStatus s = STATUS_MAP.get(msg);
     return s == null ? MemcacheStatus.UNKNOWN : s;
